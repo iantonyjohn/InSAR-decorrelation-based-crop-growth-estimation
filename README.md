@@ -5,4 +5,3 @@ Details of the files in the repo-
   3. "Workflow_DCOH.ipynb" contains the jupyter notebook for plotting the time-series mean decorrelation
   4. "Workflow_NDVI.ipynb" contains the jupyter notebook for plotting the time-series mean NDVI
   5. "final_7_plots" folder contails .shp file and other dependant files with informaiton on the study field areas and shapefile
-![Uploading Area of Interest_FINAL.jpg…]()
