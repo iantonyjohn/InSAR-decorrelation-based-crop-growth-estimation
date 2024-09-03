@@ -1,0 +1,109 @@
+
+
+// Define the date ranges
+var dateRanges = [
+  ['2023-01-08' , '2023-02-01'],['2023-02-01' , '2023-02-13'],['2023-02-13' , '2023-02-25'],
+  ['2023-02-25' , '2023-04-26'],['2023-04-26' , '2023-05-20'],['2023-05-20' , '2023-06-01'],
+  ['2023-06-01' , '2023-06-13'],['2023-06-13' , '2023-06-25'],['2023-06-25' , '2023-07-07'],
+  ['2023-07-07' , '2023-07-19'],['2023-07-19' , '2023-07-31'],['2023-07-31' , '2023-08-12'],
+  ['2023-08-12' , '2023-08-24'],['2023-08-24' , '2023-09-05'],['2023-09-05' , '2023-09-17'],
+  ['2023-09-17' , '2023-10-11'],['2023-10-11' , '2023-10-23'],['2023-10-23' , '2023-11-04'],
+  ['2023-11-04' , '2023-11-16']
+];
+
+// Function to calculate NDVI
+function calculateNDVI(image) {
+  var ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI');
+  return image.addBands(ndvi);
+}
+
+// Function to get the Sentinel-2 image for a specific date range
+function getS2Image(dateRange) {
+  return ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+    .filterBounds(aoi)
+    .filterDate(dateRange[0], dateRange[1])
+    .sort('CLOUDY_PIXEL_PERCENTAGE')
+    .first()
+    .clip(aoi);
+}
+
+// Calculate NDVI for all date ranges
+var ndviCollection = ee.ImageCollection(dateRanges.map(function(dateRange) {
+  var image = getS2Image(dateRange);
+  return calculateNDVI(image);
+}));
+
+// Set up the map
+Map.centerObject(aoi, 10);
+Map.addLayer(aoi, {color: 'FF0000'}, 'Area of Interest');
+
+// Function to export the current NDVI image
+function exportNDVI() {
+  var index = slider.getValue();
+  var image = ee.Image(ndviCollection.toList(dateRanges.length).get(index));
+  var date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd').getInfo();
+  
+  // Set up export parameters
+  var exportParams = {
+    image: image.select('NDVI'),
+    description: 'NDVI_' + date,
+    scale: 10,  // Sentinel-2 resolution
+    region: aoi.geometry(),
+    maxPixels: 1e9
+  };
+  
+  // Start the export task
+  var task = Export.image.toDrive(exportParams);
+  task.start();
+  
+  print('Exporting NDVI image for ' + date);
+}
+
+// Set up UI elements
+var label = ui.Label('NDVI Map');
+var dateLabel = ui.Label('Date: ');
+var slider = ui.Slider({
+  min: 0,
+  max: dateRanges.length - 1,
+  step: 1,
+  onChange: updateMap,
+  style: {stretch: 'horizontal'}
+});
+var nextButton = ui.Button({
+  label: 'Next',
+  onClick: function() {
+    var newValue = (slider.getValue() + 1) % dateRanges.length;
+    slider.setValue(newValue);
+  }
+});
+var exportButton = ui.Button({
+  label: 'Export Current NDVI',
+  onClick: exportNDVI
+});
+
+// Function to update the map based on slider value
+function updateMap() {
+  var index = slider.getValue();
+  var image = ee.Image(ndviCollection.toList(dateRanges.length).get(index));
+  var date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd').getInfo();
+  dateLabel.setValue('Date: ' + date);
+  
+  // Clear previous layers and add the new NDVI layer
+  Map.layers().reset();
+  Map.addLayer(aoi, {color: 'FF0000'}, 'Area of Interest');
+  Map.addLayer(image.select('NDVI'), {
+    min: -1,
+    max: 1,
+    palette: ['blue', 'white', 'green']
+  }, 'NDVI');
+}
+
+// Add UI elements to the map
+var panel = ui.Panel({
+  widgets: [label, dateLabel, slider, nextButton, exportButton],
+  style: {position: 'top-left'}
+});
+Map.add(panel);
+
+// Initialize the map with the first image
+updateMap();
